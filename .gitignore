@@ -1,0 +1,7 @@
+*.pyc
+.DS_Config
+.idea
+/dist/
+/build/
+/*.egg-info
+jinja-compose.yml
