@@ -62,9 +62,9 @@ print('Found {} GPUs'.format(n_gpu))
 if args.template is not None:
     from jinja2 import Template
     content = Template(args.template.read()).render(N_GPU=n_gpu)
-    config = yaml.load(content)
+    config = yaml.load(content, Loader=yaml.FullLoader)
 else:
-    config = yaml.load(args.file)
+    config = yaml.load(args.file, Loader=yaml.FullLoader)
 
 if config is None:
     raise RuntimeError('Compose file is empty')
