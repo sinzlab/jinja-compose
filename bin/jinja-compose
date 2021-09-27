@@ -5,8 +5,36 @@ import json
 import sys
 import re
 import subprocess
+import os
 
-GPU_DEVICE_PATTERN = re.compile(r'/dev/nvidia\d+')
+class MyDumper(yaml.Dumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super(MyDumper, self).increase_indent(flow, False)
+
+def split_by_commas(s):
+    return s.split(',')
+
+def pretty(d, indent, result=""):
+    if isinstance(d, dict):
+        for key, value in d.items():
+            result += " " * indent + str(key) + ": "
+            if isinstance(value, dict):
+                result = pretty(value, indent + 2, result + "\n")
+            elif isinstance(value, list):
+                result = pretty(value, indent + 2, result + "\n")
+            else:
+                result += str(value) + "\n"
+    elif isinstance(d, list):
+        for value in d:
+            result += " " * indent + "- "
+            if isinstance(value, dict):
+                result = pretty(value, indent + 2, result + "\n")
+            elif isinstance(value, list):
+                result = pretty(value, indent + 2, result + "\n")
+            else:
+                result += str(value) + "\n"
+
+    return result
 
 # support Python 2 or 3
 if sys.version_info[0] == 3:
@@ -39,7 +67,7 @@ parser.add_argument('-t', '--template', type=argparse.FileType('r'),
                          '--template argument discards --file argument.')
 parser.add_argument('-o', '--output', metavar='OUTPUT_FILE', type=argparse.FileType('w'),
                     default='jinja-compose.yml',
-                    help='Specify an alternate output compose file (default: nvidia-docker-compose.yml)')
+                    help='Specify an alternate output compose file (default: jinja-compose.yml')
 parser.add_argument('-G', '--generate', action='store_true',
                     help='Generate output compose file and exit, do not run docker-compose')
 
@@ -49,27 +77,24 @@ if args.file is None and args.template is None:
     print('Missing docker-compose file.')
     sys.exit(1)
 
-# Rather hacky implementation to obtain the number of GPUs. Look for an improvement in the future
-try:
-    n_gpu = len(subprocess.check_output(['nvidia-smi', '-L'], timeout=10).decode().strip().split('\n'))
-except (subprocess.TimeoutExpired, subprocess.CalledProcessError, file_error):
-    # Error calling nvidia-smi. setting N_GPU to 0
-    n_gpu = 0
-
-print('Found {} GPUs'.format(n_gpu))
-
-
 if args.template is not None:
-    from jinja2 import Template
-    content = Template(args.template.read()).render(N_GPU=n_gpu)
-    config = yaml.load(content, Loader=yaml.FullLoader)
+    template = args.template.read()
 else:
-    config = yaml.load(args.file, Loader=yaml.FullLoader)
+    template = args.file.read()
+
+from jinja2 import Template, Environment
+env = Environment(line_comment_prefix='#')
+env.filters['pretty'] = pretty
+
+T1 = env.from_string(template)
+first_pass = T1.render(split_by_commas=split_by_commas, **os.environ)
+
+config = yaml.load(first_pass, Loader=yaml.FullLoader)
 
 if config is None:
     raise RuntimeError('Compose file is empty')
 
-yaml.safe_dump(config, args.output, default_flow_style=False)
+yaml.dump(config, args.output, default_flow_style=False, Dumper=MyDumper)
 
 if not args.generate:
     from compose.cli.main import main as compose_main
