@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import argparse
 import yaml
 import json
@@ -39,9 +39,11 @@ parser.add_argument('-t', '--template', type=argparse.FileType('r'),
                          '--template argument discards --file argument.')
 parser.add_argument('-o', '--output', metavar='OUTPUT_FILE', type=argparse.FileType('w'),
                     default='jinja-compose.yml',
-                    help='Specify an alternate output compose file (default: nvidia-docker-compose.yml)')
+                    help='Specify an alternate output compose file (default: jinja-compose.yml)')
 parser.add_argument('-G', '--generate', action='store_true',
                     help='Generate output compose file and exit, do not run docker-compose')
+parser.add_argument('-s', '--safeloader', action='store_true',
+                    help='Uses the SafeLoader when loading the YAML, this removes the possible exploit that the default FullLoader enables')
 
 (args, extras) = parser.parse_known_args()
 
@@ -58,13 +60,21 @@ except (subprocess.TimeoutExpired, subprocess.CalledProcessError, file_error):
 
 print('Found {} GPUs'.format(n_gpu))
 
+#
+# Use the more secure SafeLoader if requested, see https://github.com/yaml/pyyaml/wiki/PyYAML-yaml.load(input)-Deprecation
+#
+if args.safeloader:
+    loader = yaml.SafeLoader
+else:
+    loader = yaml.FullLoader
+
 
 if args.template is not None:
     from jinja2 import Template
     content = Template(args.template.read()).render(N_GPU=n_gpu)
-    config = yaml.load(content, Loader=yaml.FullLoader)
+    config = yaml.load(content, Loader=loader)
 else:
-    config = yaml.load(args.file, Loader=yaml.FullLoader)
+    config = yaml.load(args.file, Loader=loader)
 
 if config is None:
     raise RuntimeError('Compose file is empty')

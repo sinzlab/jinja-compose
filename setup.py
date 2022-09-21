@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='jinja-compose',
-      version='0.0.1',
+      version='0.0.2',
       description='docker-compose wrapper with Jinja support',
       url='https://github.com/sinzlab/jinja-compose',
       author='Edgar Y. Walker',
